@@ -1,0 +1,5 @@
+[
+  {"name": "nano",  "id": "TODO", "in_per_m": null, "out_per_m": null},
+  {"name": "super", "id": "nvidia/nemotron-3-super-120b-a12b", "in_per_m": null, "out_per_m": null},
+  {"name": "ultra", "id": "TODO", "in_per_m": null, "out_per_m": null}
+]

@@ -1,0 +1,31 @@
+
+I would like you to implement a module named TopModule with the following
+interface. All input and output ports are one bit unless otherwise
+specified.
+
+ - input clk
+ - input reset (synchronous, active high)
+ - input bid_valid
+ - input bid_price (16 bits)
+ - input ask_valid
+ - input ask_price (16 bits)
+ - output have_both
+ - output crossed
+ - output spread (16 bits)
+
+The module tracks the most recent bid and ask quotes of a market, like the
+top of an order book. All state changes on the rising edge of clk.
+
+When reset is high, forget both quotes. Reset takes priority over everything
+else. When bid_valid is high, store bid_price as the current bid. When
+ask_valid is high, store ask_price as the current ask. Both can update in the
+same cycle.
+
+The outputs are combinational functions of the stored quotes only, not of the
+current inputs:
+ - have_both is high once a bid and an ask have both been stored since the
+   last reset.
+ - crossed is high when have_both is high and the bid is greater than or
+   equal to the ask.
+ - spread is the ask minus the bid when have_both is high and crossed is low;
+   otherwise it is 0.

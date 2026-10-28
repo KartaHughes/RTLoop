@@ -54,11 +54,11 @@ def _problem_dir(problem_id):
 
 
 def get_prompt(problem_id):
-    return (_problem_dir(problem_id) / f"{problem_id}_prompt.txt").read_text()
+    return (_problem_dir(problem_id) / f"{problem_id}_prompt.txt").read_text(encoding="utf-8", errors="replace")
 
 
 def get_reference(problem_id):
-    return (_problem_dir(problem_id) / f"{problem_id}_ref.sv").read_text()
+    return (_problem_dir(problem_id) / f"{problem_id}_ref.sv").read_text(encoding="utf-8", errors="replace")
 
 
 def run_candidate(problem_id, code, timeout=TIMEOUT_S):
@@ -76,7 +76,7 @@ def run_candidate(problem_id, code, timeout=TIMEOUT_S):
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        (tmp / "sample.sv").write_text(code)
+        (tmp / "sample.sv").write_text(code, encoding="utf-8")
         problem_dir = _problem_dir(problem_id)
         shutil.copy(problem_dir / f"{problem_id}_ref.sv", tmp / "ref.sv")
         shutil.copy(problem_dir / f"{problem_id}_test.sv", tmp / "test.sv")

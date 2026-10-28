@@ -165,7 +165,11 @@ def cmd_run(args):
     counter = {"n": 0}
 
     def work(pid):
-        res = solve(client, models, pid, args.attempts, budget)
+        try:
+            res = solve(client, models, pid, args.attempts, budget)
+        except Exception as exc:  # don't let one bad problem kill the run; it is retried on resume
+            print(f"ERROR on {pid}: {exc!r}", flush=True)
+            return
         with write_lock:
             with results_path.open("a") as f:
                 f.write(json.dumps(res) + "\n")

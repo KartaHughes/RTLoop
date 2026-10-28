@@ -1,5 +1,5 @@
 [
-  {"name": "nano",  "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", "in_per_m": null, "out_per_m": null},
-  {"name": "super", "id": "nvidia/nemotron-3-super-120b-a12b", "in_per_m": null, "out_per_m": null},
+  {"name": "nano",  "id": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", "in_per_m": 0.06, "out_per_m": 0.24},
+  {"name": "super", "id": "nvidia/nemotron-3-super-120b-a12b", "in_per_m": 0.30, "out_per_m": 0.90},
   {"name": "ultra", "id": "nvidia/Nemotron-3-Ultra-550b-a55b", "in_per_m": null, "out_per_m": null}
 ]

@@ -1,0 +1,10 @@
+.env
+.venv/
+.git/
+runs/
+third_party/
+__pycache__/
+*.pyc
+*.vvp
+*.vcd
+feedback-notes.md

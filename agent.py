@@ -154,7 +154,7 @@ def cmd_run(args):
     results_path = out_dir / "results.jsonl"
     done = set()
     if results_path.exists():
-        done = {json.loads(line)["problem"] for line in results_path.read_text().splitlines() if line}
+        done = {json.loads(line)["problem"] for line in results_path.read_text(encoding="utf-8-sig").splitlines() if line}
     todo = [p for p in problems if p not in done]
     print(f"{args.name}: {len(todo)} to run ({len(done)} already done), models={[m['name'] for m in models]}, "
           f"attempts/model={args.attempts}")
@@ -189,13 +189,15 @@ def pct(sorted_vals, p):
 
 def cmd_report(args):
     path = ROOT / "runs" / args.name / "results.jsonl"
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line]
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8-sig").splitlines() if line]
     n = len(rows)
     passed = sum(r["passed"] for r in rows)
     calls = [a for r in rows for a in r["attempts"] if a.get("latency_s") is not None]
     lat = sorted(a["latency_s"] for a in calls)
     tokens = sum(a["prompt_tokens"] + a["completion_tokens"] for a in calls)
-    costs = [a["cost_usd"] for a in calls]
+    # Price from token counts and the current models.json, so older runs get priced too.
+    by_name = {m["name"]: m for m in load_models()}
+    costs = [cost_usd(by_name[a["model"]], a["prompt_tokens"], a["completion_tokens"]) for a in calls]
     solved_by = {}
     for r in rows:
         if r["passed"]:

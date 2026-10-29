@@ -16,6 +16,7 @@ from openai import OpenAI
 
 import agent
 import bench_view
+import market
 import runner
 import wave
 from check_api import BASE_URL, load_env
@@ -119,6 +120,11 @@ def render_log(rows, pending=None, spent=0.0):
 WAVE_IDLE = wave.render_history([])
 
 
+def mk(market_html):
+    """Show the market panel only when there is a chart, so no empty box appears."""
+    return gr.update(value=market_html, visible=bool(market_html))
+
+
 def show_spec(label):
     return runner.get_prompt(PRESETS[label]).strip()
 
@@ -127,18 +133,18 @@ def run_agent(label, mode, attempts, request: gr.Request):
     pid = PRESETS[label]
     ok, msg = GUARD.check(client_ip(request))
     if not ok:
-        yield banner("BLOCKED", msg, "warn"), render_log([]), WAVE_IDLE, "", ""
+        yield banner("BLOCKED", msg, "warn"), render_log([]), mk(""), WAVE_IDLE, "", ""
         return
 
     cfgs = MODELS[:1] if mode == MODE_NANO else MODELS[:2]
     messages = [{"role": "system", "content": agent.SYSTEM},
                 {"role": "user", "content": runner.get_prompt(pid)}]
-    rows, spent, code, sim, wave_html, waves = [], 0.0, "", "", WAVE_IDLE, []
+    rows, spent, code, sim, wave_html, waves, market_html = [], 0.0, "", "", WAVE_IDLE, [], ""
     try:
         for cfg in cfgs:
             for n in range(1, int(attempts) + 1):
                 yield (banner("RUNNING", f"{cfg['name'].upper()} ATTEMPT {n}", "run"),
-                       render_log(rows, pending=cfg["name"], spent=spent), wave_html, code, sim)
+                       render_log(rows, pending=cfg["name"], spent=spent), mk(market_html), wave_html, code, sim)
                 start = time.time()
                 try:
                     resp = agent.call_model(CLIENT, cfg["id"], messages)
@@ -158,12 +164,14 @@ def run_agent(label, mode, attempts, request: gr.Request):
                               "NO CODE BLOCK IN REPLY (OUTPUT MAY HAVE HIT THE TOKEN LIMIT)"}
                 waves.append(dict(model=cfg["name"], status=result["status"], vcd=result.get("vcd", "")))
                 wave_html = wave.render_history(waves)
+                if pid.startswith("Trade"):  # keep the last good chart if this attempt produced no waveform
+                    market_html = market.render_panel(result.get("vcd", "")) or market_html
                 rows.append(dict(model=cfg["name"], status=result["status"], tokens=pt + ct,
                                  secs=time.time() - start, cost=usd))
                 sim = result["feedback"] or "ALL TESTS PASSED: 0 MISMATCHES"
                 if result["status"] == "pass":
                     yield (banner("PASS", f"SOLVED BY {cfg['name'].upper()} IN {len(rows)} CALL(S)", "pass"),
-                           render_log(rows, spent=spent), wave_html, code, sim)
+                           render_log(rows, spent=spent), mk(market_html), wave_html, code, sim)
                     return
                 messages += [
                     {"role": "assistant", "content": text or "(empty reply)"},
@@ -171,7 +179,7 @@ def run_agent(label, mode, attempts, request: gr.Request):
                         status=result["status"], details=result["feedback"] or "(none)")},
                 ]
         yield (banner("FAIL", "NOT SOLVED WITHIN THE ATTEMPT LIMIT", "fail"),
-               render_log(rows, spent=spent), wave_html, code, sim)
+               render_log(rows, spent=spent), mk(market_html), wave_html, code, sim)
     finally:
         GUARD.add_cost(spent)
 
@@ -249,6 +257,7 @@ with gr.Blocks(title="RTLoop") as demo:
                 with gr.Column(scale=3):
                     status = gr.HTML(banner("READY", "SELECT A PROBLEM AND PRESS RUN", "run"))
                     log = gr.HTML(render_log([]))
+                    market_out = gr.HTML("", visible=False)
                     wave_out = gr.HTML(WAVE_IDLE)
                     code_out = gr.Textbox(label="CANDIDATE VERILOG", lines=14, interactive=False)
                     sim_out = gr.Textbox(label="SIMULATOR OUTPUT / FEEDBACK TO MODEL", lines=5, interactive=False)
@@ -258,7 +267,7 @@ with gr.Blocks(title="RTLoop") as demo:
             'BENCHMARK: NVIDIA VERILOGEVAL. SOURCE: GITHUB.COM/KARTAHUGHES/RTLOOP</div>')
 
     problem.change(show_spec, problem, spec)
-    run_btn.click(run_agent, [problem, mode, attempts], [status, log, wave_out, code_out, sim_out])
+    run_btn.click(run_agent, [problem, mode, attempts], [status, log, market_out, wave_out, code_out, sim_out])
 
 demo.queue(default_concurrency_limit=4, max_size=20)
 

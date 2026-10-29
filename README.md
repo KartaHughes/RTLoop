@@ -10,15 +10,21 @@ RTLoop asks an NVIDIA Nemotron model (served on Nebius Token Factory) to impleme
 
 Measured on 151 VerilogEval spec-to-RTL problems (see Benchmark below), with a cap of 8,192 output tokens per model call. Costs are computed from token counts and Nebius Token Factory list prices (Nano $0.06 in / $0.24 out per 1M tokens, Super $0.30 / $0.90).
 
-| Configuration | Solved | Cost |
-|---|---|---|
-| Nemotron 3 Nano, one attempt | 92 / 151 (60.9%) | $0.084 |
-| Nano, up to 3 attempts with simulator feedback | 114 / 151 (75.5%) | $0.210 |
-| Nano (2 attempts), then Super (2 attempts) | 126 / 151 (83.4%) | $0.382 |
+Each configuration was run **three times** (sampling is random). Solved counts per run, mean, and cost per run:
 
-- Super was only called on the problems Nano could not solve, and it solved 16 of them.
-- **Each configuration was run once.** Sampling is random: in the retry-loop run only 85 problems passed on the first attempt, against 92 in the one-shot run under identical conditions. Treat differences of a few problems as noise. [TODO: add repeat-run ranges here once measured.]
+| Configuration | Solved per run | Mean | Range | Cost per run |
+|---|---|---|---|---|
+| Nemotron 3 Nano, one attempt | 92, 88, 90 | 90.0 / 151 (59.6%) | 88-92 | $0.084-$0.090 |
+| Nano, up to 3 attempts with simulator feedback | 114, 117, 115 | 115.3 / 151 (76.4%) | 114-117 | $0.197-$0.211 |
+| Nano (2 attempts), then Super (2 attempts) | 126, 125, 123 | 124.7 / 151 (82.6%) | 123-126 | $0.382-$0.443 |
+| Nano, then Super, then Ultra (2 attempts each), **one run only** | 133 | 133 / 151 (88.1%) | n/a | $0.430 for Nano and Super; Ultra not priced |
+
+- The gaps between configurations (about 90, then 115, then 125 solved) are much larger than the run-to-run spread within each (2 to 4 problems).
+- Super was only called on problems Nano could not solve; in the first cascade run it solved 16 of them.
 - The attempt budgets are not identical across rows (3 calls for Nano retries, up to 4 calls for the cascade).
+- **The Nano, Super, Ultra row is a single run**, so it has no range; it solved 18 more problems than the three-run Nano retry mean and 8 more than the cascade mean, but treat that gap as indicative. In that run, Nano solved 109, Super 17 and Ultra 7 (Ultra was handed 25 problems). Of the 18 unsolved, 13 were mismatches, 4 were compile errors and 1 was cut off at the token limit.
+- Nebius lists no Ultra price in the console I could see, so no Ultra cost is reported. In that run Ultra made 47 calls (168,069 prompt tokens and 241,342 completion tokens, in `results/cascade_nsu.jsonl`).
+- Ultra was also tried on its own, from a fresh start, on the 25 problems the first Nano, Super run left unsolved (`ultra_unsolved`, 2 attempts each): it solved 14. In the cascade it solved 7 of the 25 problems it was handed, but those are a different set of problems, and in the cascade Ultra sees the earlier failed attempts in its context. I did not test whether that history helps or hurts, so I make no claim about it.
 - 7 of the 25 problems unsolved by the cascade were replies cut off at the 8,192-token cap, so the cap understates what the models can do.
 - `Trade001_top_of_book` is one hand-written problem, so it is a demonstration, not a statistic. In the single run recorded in `results/trade.jsonl`, Nano failed twice and Super solved it.
 - Raw per-problem logs for every run (attempts, tokens, latency, status) are in `results/*.jsonl`. Reproduce a summary with `python agent.py report --name <run>` after copying a log to `runs/<run>/results.jsonl`.

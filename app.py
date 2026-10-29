@@ -53,6 +53,10 @@ PRESETS = {label_for(p): p for p in PRESET_IDS}
 LABELS = list(PRESETS)
 MODE_NANO = "NANO ONLY"
 MODE_CASCADE = "NANO > SUPER CASCADE"
+MODE_ULTRA = "NANO > SUPER > ULTRA"
+# Cap-only estimate for models without a listed price (Ultra): deliberately high, so the
+# daily spend cap can never be bypassed. It is never shown as a real cost.
+UNPRICED_CAP_USD_PER_M = 3.0
 
 
 class Guard:
@@ -111,10 +115,12 @@ def render_log(rows, pending=None, spent=0.0):
                  '<td class="run">RUNNING...</td><td>-</td><td>-</td><td>-</td></tr>')
     if not body:
         body = '<tr><td colspan="6" class="dim">NO ATTEMPTS YET</td></tr>'
+    unpriced = any(r["cost"] is None and r["status"] != "api_error" for r in rows)
+    unpriced_note = " + UNPRICED MODEL CALLS (NO PUBLIC PRICE)" if unpriced else ""
     return ('<div class="panel-title">ATTEMPT LOG</div><table class="log"><thead><tr>'
             '<th>#</th><th>MODEL</th><th>RESULT</th><th>TOKENS</th><th>TIME</th><th>COST</th>'
             f'</tr></thead><tbody>{body}</tbody></table>'
-            f'<div class="spent">SESSION COST ${spent:.4f}</div>')
+            f'<div class="spent">SESSION COST ${spent:.4f}{unpriced_note}</div>')
 
 
 WAVE_IDLE = wave.render_history([])
@@ -136,10 +142,10 @@ def run_agent(label, mode, attempts, request: gr.Request):
         yield banner("BLOCKED", msg, "warn"), render_log([]), mk(""), WAVE_IDLE, "", ""
         return
 
-    cfgs = MODELS[:1] if mode == MODE_NANO else MODELS[:2]
+    cfgs = MODELS[:1] if mode == MODE_NANO else MODELS[:2] if mode == MODE_CASCADE else MODELS[:3]
     messages = [{"role": "system", "content": agent.SYSTEM},
                 {"role": "user", "content": runner.get_prompt(pid)}]
-    rows, spent, code, sim, wave_html, waves, market_html = [], 0.0, "", "", WAVE_IDLE, [], ""
+    rows, spent, cap_spent, code, sim, wave_html, waves, market_html = [], 0.0, 0.0, "", "", WAVE_IDLE, [], ""
     try:
         for cfg in cfgs:
             for n in range(1, int(attempts) + 1):
@@ -155,7 +161,8 @@ def run_agent(label, mode, attempts, request: gr.Request):
                 text = resp.choices[0].message.content or ""
                 pt, ct = resp.usage.prompt_tokens, resp.usage.completion_tokens
                 usd = agent.cost_usd(cfg, pt, ct)
-                spent += usd or 0.0
+                spent += usd if usd is not None else 0.0
+                cap_spent += usd if usd is not None else (pt + ct) * UNPRICED_CAP_USD_PER_M / 1e6
                 code = agent.extract_code(text)
                 if code:
                     result = runner.run_candidate(pid, code, want_wave=True)
@@ -181,7 +188,7 @@ def run_agent(label, mode, attempts, request: gr.Request):
         yield (banner("FAIL", "NOT SOLVED WITHIN THE ATTEMPT LIMIT", "fail"),
                render_log(rows, spent=spent), mk(market_html), wave_html, code, sim)
     finally:
-        GUARD.add_cost(spent)
+        GUARD.add_cost(cap_spent)
 
 
 CSS = """
@@ -226,12 +233,14 @@ details.wave-attempt summary { cursor:pointer; padding:5px 2px; font-weight:700;
 details.wave-attempt summary.ok { color:var(--green); } details.wave-attempt summary.bad { color:var(--red); }
 .bar-row { display:flex; align-items:center; gap:10px; margin:7px 0; font-size:12px; }
 .bar-label { width:270px; flex:none; letter-spacing:.05em; }
-.bar { flex:1; height:16px; background:#140e00; border:1px solid var(--line); }
+.bar { flex:1; height:16px; background:#140e00; border:1px solid var(--line); position:relative; }
+.bar .range { position:absolute; top:0; bottom:0; background:rgba(255,255,255,.55); }
 .bar .fill { height:100%; background:var(--amber); }
-.bar-val { width:210px; flex:none; text-align:right; }
+.bar-val { width:360px; flex:none; text-align:right; }
 .grid { display:flex; flex-wrap:wrap; gap:3px; max-width:560px; margin:8px 0; }
 .cell { display:inline-block; width:15px; height:15px; border:1px solid #000; vertical-align:middle; }
 .c-n1 { background:var(--green); } .c-n2 { background:var(--amber); } .c-super { background:#4dd0ff; }
+.c-ultra { background:#c77dff; }
 .c-cut { background:#7a2a2a; } .c-fail { background:var(--red); }
 .legends { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:11px; letter-spacing:.04em; margin:6px 0 10px; }
 .legend { white-space:nowrap; }
@@ -249,7 +258,7 @@ with gr.Blocks(title="RTLoop") as demo:
             with gr.Row():
                 with gr.Column(scale=2):
                     problem = gr.Dropdown(LABELS, value=LABELS[0], label="PROBLEM", interactive=True)
-                    mode = gr.Radio([MODE_NANO, MODE_CASCADE], value=MODE_CASCADE, label="MODE")
+                    mode = gr.Radio([MODE_NANO, MODE_CASCADE, MODE_ULTRA], value=MODE_CASCADE, label="MODE")
                     attempts = gr.Slider(1, 3, value=2, step=1, label="ATTEMPTS PER MODEL")
                     run_btn = gr.Button("RUN AGENT", variant="primary")
                     spec = gr.Textbox(value=show_spec(LABELS[0]), label="SPEC (WHAT THE MODEL IS ASKED TO BUILD)",

@@ -146,6 +146,11 @@ def cmd_run(args):
             sys.exit(f"Set the model id for '{cfg['name']}' in models.json (run check_api.py to list them)")
 
     problems = runner.list_custom_problems() if args.custom else runner.list_problems()
+    if args.only_failed_from:  # re-try only the problems a previous run did not solve
+        prev = ROOT / "runs" / args.only_failed_from / "results.jsonl"
+        failed = {json.loads(line)["problem"] for line in prev.read_text(encoding="utf-8-sig").splitlines()
+                  if line and not json.loads(line)["passed"]}
+        problems = [p for p in problems if p in failed]
     if args.limit and not args.custom:
         problems = sorted(random.Random(0).sample(problems, args.limit))  # fixed seed: same subset every run
 
@@ -222,6 +227,8 @@ def main():
     run.add_argument("--attempts", type=int, default=1)
     run.add_argument("--limit", type=int, default=0)
     run.add_argument("--custom", action="store_true", help="run the hand-written problems in custom_problems/")
+    run.add_argument("--only-failed-from", dest="only_failed_from", default="",
+                     help="only run problems that this earlier run (name under runs/) failed")
     run.add_argument("--workers", type=int, default=6)
     run.add_argument("--max-tokens", type=int, default=3_000_000, dest="max_tokens")
     run.add_argument("--max-usd", type=float, default=0.0, dest="max_usd")

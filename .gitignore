@@ -6,3 +6,4 @@ runs/
 third_party/
 *.vvp
 *.vcd
+devpost/

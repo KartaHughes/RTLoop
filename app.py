@@ -193,6 +193,24 @@ def run_agent(label, mode, attempts, request: gr.Request):
 
 CSS = """
 :root { --amber:#ffb000; --dim:#8a6200; --line:#4a3500; --green:#33ff66; --red:#ff4d4d; }
+/* Force our palette whatever the visitor's OS/browser theme is (Gradio otherwise switches to light colours). */
+:root, .dark, .gradio-container {
+  color-scheme: dark;
+  --body-text-color:#ffb000; --body-text-color-subdued:#8a6200;
+  --body-background-fill:#000; --background-fill-primary:#050505; --background-fill-secondary:#000;
+  --block-background-fill:#050505; --block-border-color:#4a3500; --border-color-primary:#4a3500;
+  --block-title-text-color:#ffb000; --block-label-text-color:#ffb000; --block-label-background-fill:#050505;
+  --panel-background-fill:#050505; --panel-border-color:#4a3500;
+  --input-background-fill:#000; --input-background-fill-focus:#000; --input-border-color:#4a3500;
+  --input-border-color-focus:#ffb000; --input-placeholder-color:#6b4a00; --input-text-color:#ffb000;
+  --checkbox-label-background-fill:#140e00; --checkbox-label-background-fill-hover:#241a00;
+  --checkbox-label-background-fill-selected:#ffb000; --checkbox-label-border-color:#4a3500;
+  --checkbox-label-text-color:#ffb000; --checkbox-label-text-color-selected:#000;
+  --button-secondary-background-fill:#140e00; --button-secondary-text-color:#ffb000;
+  --button-secondary-border-color:#4a3500;
+  --table-even-background-fill:#050505; --table-odd-background-fill:#050505; --table-border-color:#4a3500;
+  --neutral-50:#050505; --neutral-100:#0a0a0a; --neutral-200:#4a3500; --neutral-700:#ffb000; --neutral-800:#ffb000;
+}
 body, .gradio-container, .main, .app { background:#000 !important; color:var(--amber) !important;
   font-family: Consolas, "Lucida Console", "Courier New", monospace !important; }
 .block, .form, .gr-group, .panel, .gradio-container .prose { background:#050505 !important;
@@ -203,6 +221,7 @@ textarea, input, select, .wrap, ul.options, .options li { background:#000 !impor
   font-family: inherit !important; border-radius:0 !important; border-color:var(--line) !important; }
 button { border-radius:0 !important; font-family: inherit !important; letter-spacing:.1em; }
 button.primary { background:var(--amber) !important; color:#000 !important; font-weight:700 !important; border:none !important; }
+.topbar, .topbar * { color:#000 !important; }
 .topbar { background:var(--amber); color:#000; font-weight:700; padding:6px 12px; letter-spacing:.12em;
   display:flex; justify-content:space-between; font-size:13px; }
 .banner { padding:10px 12px; font-size:15px; letter-spacing:.08em; border-left:6px solid var(--amber); }
@@ -236,7 +255,8 @@ details.wave-attempt summary.ok { color:var(--green); } details.wave-attempt sum
 .bar { flex:1; height:16px; background:#140e00; border:1px solid var(--line); position:relative; }
 .bar .range { position:absolute; top:0; bottom:0; background:rgba(255,255,255,.55); }
 .bar .fill { height:100%; background:var(--amber); }
-.bar-val { width:360px; flex:none; text-align:right; }
+.bar-val { width:440px; flex:none; text-align:right; white-space:nowrap; }
+.bar-label { width:260px; }
 .grid { display:flex; flex-wrap:wrap; gap:3px; max-width:560px; margin:8px 0; }
 .cell { display:inline-block; width:15px; height:15px; border:1px solid #000; vertical-align:middle; }
 .c-n1 { background:var(--green); } .c-n2 { background:var(--amber); } .c-super { background:#4dd0ff; }

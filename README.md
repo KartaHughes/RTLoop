@@ -66,13 +66,23 @@ python agent.py run --name trade --models 0,1,2 --attempts 2 --custom # the trad
 
 ## How Nebius Token Factory and NVIDIA Nemotron are used
 
-Every generation is a runtime call to Nebius Token Factory's OpenAI-compatible API using NVIDIA Nemotron 3 models. [TODO: what Token Factory made easy or hard.]
+Every generation is a runtime call to Nebius Token Factory's OpenAI-compatible API using NVIDIA Nemotron 3 models: Nano (`nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`), Super (`nvidia/nemotron-3-super-120b-a12b`) and Ultra (`nvidia/Nemotron-3-Ultra-550b-a55b`). The cascade is built around the three sizes: Nano makes the first attempts, Super takes over when Nano keeps failing, and Ultra is the last resort.
+
+Where Token Factory accelerated the work:
+- The standard `openai` Python client worked with only the base URL changed, so the agent needed no provider-specific code.
+- Per-token pricing made large experiments cheap: a full 151-problem Nano run costs about $0.09 and takes minutes, which is what made three repeats of every configuration affordable.
+- Having three model sizes behind one API made the escalation design (and its measurement) straightforward.
+
+Frictions I hit (reasoning replies that used the whole 8,192-token budget, unlisted Ultra pricing, a long latency tail) are reported in the Results notes above and in my hackathon feedback.
 
 ## Limitations
 
 - Runs on Icarus Verilog 11; five benchmark problems are excluded as described above.
 - Generated code is executed in a simulator. Treat model output as untrusted code.
-- [TODO: anything else you actually found.]
+- Results are from one benchmark (VerilogEval, spec-to-RTL) with an 8,192-token output cap per call; a higher cap would likely recover some of the replies that were cut off.
+- The three-stage (Nano, Super, Ultra) result is a single run, and Ultra has no price here, so its cost is not reported.
+- The hosted demo is on a free tier: it sleeps when idle (first load can take about a minute) and is limited to preset problems, a per-visitor rate limit and a daily spend cap.
+- The market view and some waveform windows show only the early part of a test; mismatches later in a test appear only in the waveform panel.
 
 ## Licence
 

@@ -155,16 +155,29 @@ def render(vcd_text):
     return "".join(out)
 
 
-def render_panel(vcd_text, status):
-    """HTML for the demo page."""
+def render_body(vcd_text, status):
     if status == "compile_error":
-        body = '<div class="dim wave-msg">NO WAVEFORM: THE CODE DID NOT COMPILE.</div>'
-    else:
-        svg = render(vcd_text) if vcd_text else ""
-        if not svg:
-            body = '<div class="dim wave-msg">NO WAVEFORM AVAILABLE FOR THIS RUN.</div>'
-        else:
-            note = ("RED SHADING = WHERE YOUR CIRCUIT DIFFERS FROM THE REFERENCE" if status != "pass"
-                    else "YOUR CIRCUIT MATCHES THE REFERENCE (FIRST CYCLES SHOWN)")
-            body = f'{svg}<div class="spent">{note}</div>'
-    return f'<div class="panel-title">WAVEFORM: REFERENCE VS CANDIDATE</div>{body}'
+        return '<div class="dim wave-msg">NO WAVEFORM: THE CODE DID NOT COMPILE.</div>'
+    svg = render(vcd_text) if vcd_text else ""
+    if not svg:
+        return '<div class="dim wave-msg">NO WAVEFORM AVAILABLE FOR THIS ATTEMPT.</div>'
+    note = ("RED SHADING = WHERE THE CANDIDATE DIFFERS FROM THE REFERENCE" if status != "pass"
+            else "THE CANDIDATE MATCHES THE REFERENCE (FIRST CYCLES SHOWN; THE VERDICT COVERS THE WHOLE TEST)")
+    return f'{svg}<div class="spent">{note}</div>'
+
+
+def render_history(attempts):
+    """Panel with one collapsible waveform per attempt, oldest first.
+
+    attempts: list of dicts with model, status, vcd.
+    """
+    title = '<div class="panel-title">WAVEFORMS: REFERENCE VS CANDIDATE, ONE PER ATTEMPT</div>'
+    if not attempts:
+        return title + '<div class="dim wave-msg">RUN THE AGENT TO SEE THE SIMULATED SIGNALS.</div>'
+    parts = []
+    for i, a in enumerate(attempts, 1):
+        cls = "ok" if a["status"] == "pass" else "bad"
+        head = html.escape(f'ATTEMPT {i} | {a["model"].upper()} | {a["status"].upper()}')
+        parts.append(f'<details open class="wave-attempt"><summary class="{cls}">{head}</summary>'
+                     f'{render_body(a.get("vcd", ""), a["status"])}</details>')
+    return title + "".join(parts)

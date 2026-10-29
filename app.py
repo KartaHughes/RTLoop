@@ -15,6 +15,7 @@ import gradio as gr
 from openai import OpenAI
 
 import agent
+import bench_view
 import runner
 import wave
 from check_api import BASE_URL, load_env
@@ -115,8 +116,7 @@ def render_log(rows, pending=None, spent=0.0):
             f'<div class="spent">SESSION COST ${spent:.4f}</div>')
 
 
-WAVE_IDLE = ('<div class="panel-title">WAVEFORM: REFERENCE VS CANDIDATE</div>'
-             '<div class="dim wave-msg">RUN THE AGENT TO SEE THE SIMULATED SIGNALS.</div>')
+WAVE_IDLE = wave.render_history([])
 
 
 def show_spec(label):
@@ -133,7 +133,7 @@ def run_agent(label, mode, attempts, request: gr.Request):
     cfgs = MODELS[:1] if mode == MODE_NANO else MODELS[:2]
     messages = [{"role": "system", "content": agent.SYSTEM},
                 {"role": "user", "content": runner.get_prompt(pid)}]
-    rows, spent, code, sim, wave_html = [], 0.0, "", "", WAVE_IDLE
+    rows, spent, code, sim, wave_html, waves = [], 0.0, "", "", WAVE_IDLE, []
     try:
         for cfg in cfgs:
             for n in range(1, int(attempts) + 1):
@@ -156,7 +156,8 @@ def run_agent(label, mode, attempts, request: gr.Request):
                 else:
                     result = {"status": "no_code", "vcd": "", "feedback":
                               "NO CODE BLOCK IN REPLY (OUTPUT MAY HAVE HIT THE TOKEN LIMIT)"}
-                wave_html = wave.render_panel(result.get("vcd", ""), result["status"])
+                waves.append(dict(model=cfg["name"], status=result["status"], vcd=result.get("vcd", "")))
+                wave_html = wave.render_history(waves)
                 rows.append(dict(model=cfg["name"], status=result["status"], tokens=pt + ct,
                                  secs=time.time() - start, cost=usd))
                 sim = result["feedback"] or "ALL TESTS PASSED: 0 MISMATCHES"
@@ -212,26 +213,47 @@ html body .gradio-container.gradio-container label.selected.selected span,
 html body .gradio-container.gradio-container label:has(input:checked) span {
   color:#000 !important; font-weight:700 !important; }
 .gradio-container label:has(input[type=radio]) input { opacity:0; width:0; margin:0; position:absolute; }
+details.wave-attempt { margin:6px 0 10px; border-top:1px solid var(--line); }
+details.wave-attempt summary { cursor:pointer; padding:5px 2px; font-weight:700; letter-spacing:.08em; font-size:12px; }
+details.wave-attempt summary.ok { color:var(--green); } details.wave-attempt summary.bad { color:var(--red); }
+.bar-row { display:flex; align-items:center; gap:10px; margin:7px 0; font-size:12px; }
+.bar-label { width:270px; flex:none; letter-spacing:.05em; }
+.bar { flex:1; height:16px; background:#140e00; border:1px solid var(--line); }
+.bar .fill { height:100%; background:var(--amber); }
+.bar-val { width:210px; flex:none; text-align:right; }
+.grid { display:flex; flex-wrap:wrap; gap:3px; max-width:560px; margin:8px 0; }
+.cell { display:inline-block; width:15px; height:15px; border:1px solid #000; vertical-align:middle; }
+.c-n1 { background:var(--green); } .c-n2 { background:var(--amber); } .c-super { background:#4dd0ff; }
+.c-cut { background:#7a2a2a; } .c-fail { background:var(--red); }
+.legends { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:11px; letter-spacing:.04em; margin:6px 0 10px; }
+.legend { white-space:nowrap; }
+button[role=tab] { color:var(--amber) !important; background:#000 !important; letter-spacing:.1em; border-radius:0 !important; }
+button[role=tab][aria-selected=true] { background:var(--amber) !important; color:#000 !important; font-weight:700 !important; }
+.tab-wrapper, .tab-container, .tabs { border-color:var(--line) !important; }
 footer { display:none !important; }
 """
 
 with gr.Blocks(title="RTLoop") as demo:
     gr.HTML('<div class="topbar"><span>RTLOOP &gt; VERILOG AGENT</span>'
             '<span>NEMOTRON 3 | NEBIUS TOKEN FACTORY | ICARUS VERILOG 11</span></div>')
-    with gr.Row():
-        with gr.Column(scale=2):
-            problem = gr.Dropdown(LABELS, value=LABELS[0], label="PROBLEM", interactive=True)
-            mode = gr.Radio([MODE_NANO, MODE_CASCADE], value=MODE_CASCADE, label="MODE")
-            attempts = gr.Slider(1, 3, value=2, step=1, label="ATTEMPTS PER MODEL")
-            run_btn = gr.Button("RUN AGENT", variant="primary")
-            spec = gr.Textbox(value=show_spec(LABELS[0]), label="SPEC (WHAT THE MODEL IS ASKED TO BUILD)",
-                              lines=14, interactive=False)
-        with gr.Column(scale=3):
-            status = gr.HTML(banner("READY", "SELECT A PROBLEM AND PRESS RUN", "run"))
-            log = gr.HTML(render_log([]))
-            wave_out = gr.HTML(WAVE_IDLE)
-            code_out = gr.Textbox(label="CANDIDATE VERILOG", lines=14, interactive=False)
-            sim_out = gr.Textbox(label="SIMULATOR OUTPUT / FEEDBACK TO MODEL", lines=5, interactive=False)
+    with gr.Tabs():
+        with gr.Tab("LIVE AGENT"):
+            with gr.Row():
+                with gr.Column(scale=2):
+                    problem = gr.Dropdown(LABELS, value=LABELS[0], label="PROBLEM", interactive=True)
+                    mode = gr.Radio([MODE_NANO, MODE_CASCADE], value=MODE_CASCADE, label="MODE")
+                    attempts = gr.Slider(1, 3, value=2, step=1, label="ATTEMPTS PER MODEL")
+                    run_btn = gr.Button("RUN AGENT", variant="primary")
+                    spec = gr.Textbox(value=show_spec(LABELS[0]), label="SPEC (WHAT THE MODEL IS ASKED TO BUILD)",
+                                      lines=14, interactive=False)
+                with gr.Column(scale=3):
+                    status = gr.HTML(banner("READY", "SELECT A PROBLEM AND PRESS RUN", "run"))
+                    log = gr.HTML(render_log([]))
+                    wave_out = gr.HTML(WAVE_IDLE)
+                    code_out = gr.Textbox(label="CANDIDATE VERILOG", lines=14, interactive=False)
+                    sim_out = gr.Textbox(label="SIMULATOR OUTPUT / FEEDBACK TO MODEL", lines=5, interactive=False)
+        with gr.Tab("BENCHMARK (151 PROBLEMS)"):
+            gr.HTML(bench_view.build_html())
     gr.HTML('<div class="foot">GENERATED CODE IS RUN IN A SIMULATOR. DEMO IS RATE-LIMITED AND CAPPED. '
             'BENCHMARK: NVIDIA VERILOGEVAL. SOURCE: GITHUB.COM/KARTAHUGHES/RTLOOP</div>')
 

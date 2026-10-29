@@ -4,9 +4,24 @@ An agent that writes Verilog, simulates it, and fixes its own bugs. Built for th
 
 RTLoop asks an NVIDIA Nemotron model (served on Nebius Token Factory) to implement a hardware spec, runs the result in the Icarus Verilog simulator against a testbench, and feeds any compile errors or mismatches back to the model for another attempt. If a small model keeps failing, it escalates to a larger one (Nemotron 3 Nano, then Super, then Ultra). Every model call logs tokens, latency and cost.
 
+**Live demo:** https://rtloop.onrender.com (free tier: it sleeps when idle, so the first load can take about a minute).
+
 ## Results
 
-[TODO: fill from `python agent.py report --name <run>`. Only measured numbers. State the problem count, the subset and seed, and the number of runs per configuration.]
+Measured on 151 VerilogEval spec-to-RTL problems (see Benchmark below), with a cap of 8,192 output tokens per model call. Costs are computed from token counts and Nebius Token Factory list prices (Nano $0.06 in / $0.24 out per 1M tokens, Super $0.30 / $0.90).
+
+| Configuration | Solved | Cost |
+|---|---|---|
+| Nemotron 3 Nano, one attempt | 92 / 151 (60.9%) | $0.084 |
+| Nano, up to 3 attempts with simulator feedback | 114 / 151 (75.5%) | $0.210 |
+| Nano (2 attempts), then Super (2 attempts) | 126 / 151 (83.4%) | $0.382 |
+
+- Super was only called on the problems Nano could not solve, and it solved 16 of them.
+- **Each configuration was run once.** Sampling is random: in the retry-loop run only 85 problems passed on the first attempt, against 92 in the one-shot run under identical conditions. Treat differences of a few problems as noise. [TODO: add repeat-run ranges here once measured.]
+- The attempt budgets are not identical across rows (3 calls for Nano retries, up to 4 calls for the cascade).
+- 7 of the 25 problems unsolved by the cascade were replies cut off at the 8,192-token cap, so the cap understates what the models can do.
+- `Trade001_top_of_book` is one hand-written problem, so it is a demonstration, not a statistic. In the single run recorded in `results/trade.jsonl`, Nano failed twice and Super solved it.
+- Raw per-problem logs for every run (attempts, tokens, latency, status) are in `results/*.jsonl`. Reproduce a summary with `python agent.py report --name <run>` after copying a log to `runs/<run>/results.jsonl`.
 
 ## How it works
 

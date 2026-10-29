@@ -28,6 +28,15 @@ module tb();
     .ask_valid(ask_valid), .ask_price(ask_price),
     .have_both(have_both_dut), .crossed(crossed_dut), .spread(spread_dut));
 
+  wire tb_mismatch = ({have_both_ref, crossed_ref, spread_ref} !== {have_both_dut, crossed_dut, spread_dut});
+
+  // Waveform dump, read by the demo's waveform viewer.
+  initial begin
+    $dumpfile("wave.vcd");
+    $dumpvars(1, clk, reset, bid_valid, bid_price, ask_valid, ask_price, tb_mismatch,
+              have_both_ref, have_both_dut, crossed_ref, crossed_dut, spread_ref, spread_dut);
+  end
+
   integer errors = 0;
   integer clocks = 0;
 

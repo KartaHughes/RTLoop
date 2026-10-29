@@ -61,7 +61,7 @@ def get_reference(problem_id):
     return (_problem_dir(problem_id) / f"{problem_id}_ref.sv").read_text(encoding="utf-8", errors="replace")
 
 
-def run_candidate(problem_id, code, timeout=TIMEOUT_S):
+def run_candidate(problem_id, code, timeout=TIMEOUT_S, want_wave=False):
     """Simulate `code` (must define TopModule) against the problem's testbench.
 
     Returns a dict with:
@@ -98,19 +98,25 @@ def run_candidate(problem_id, code, timeout=TIMEOUT_S):
         except subprocess.TimeoutExpired:
             return _result("timeout", feedback="Simulation timed out (possible infinite loop).")
 
+        vcd = ""
+        vcd_path = tmp / "wave.vcd"
+        if want_wave and vcd_path.exists() and vcd_path.stat().st_size < 8_000_000:
+            vcd = vcd_path.read_text(errors="replace")
+
     out = sim.stdout
     match = MISMATCH_RE.search(out)
     if "TIMEOUT" in out or not match:
-        return _result("no_result", feedback=_clip(out or sim.stderr))
+        return _result("no_result", feedback=_clip(out or sim.stderr), vcd=vcd)
     mismatches, samples = int(match.group(1)), int(match.group(2))
     if mismatches == 0 and samples > 0:
-        return _result("pass", mismatches, samples)
+        return _result("pass", mismatches, samples, vcd=vcd)
     hints = "\n".join(line for line in out.splitlines() if line.startswith("Hint:"))
-    return _result("mismatch", mismatches, samples, feedback=_clip(hints or out))
+    return _result("mismatch", mismatches, samples, feedback=_clip(hints or out), vcd=vcd)
 
 
-def _result(status, mismatches=None, samples=None, feedback=""):
-    return {"status": status, "mismatches": mismatches, "samples": samples, "feedback": feedback}
+def _result(status, mismatches=None, samples=None, feedback="", vcd=""):
+    return {"status": status, "mismatches": mismatches, "samples": samples,
+            "feedback": feedback, "vcd": vcd}
 
 
 def _clip(text):

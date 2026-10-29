@@ -16,6 +16,7 @@ from openai import OpenAI
 
 import agent
 import runner
+import wave
 from check_api import BASE_URL, load_env
 
 ROOT = Path(__file__).parent
@@ -114,6 +115,10 @@ def render_log(rows, pending=None, spent=0.0):
             f'<div class="spent">SESSION COST ${spent:.4f}</div>')
 
 
+WAVE_IDLE = ('<div class="panel-title">WAVEFORM: REFERENCE VS CANDIDATE</div>'
+             '<div class="dim wave-msg">RUN THE AGENT TO SEE THE SIMULATED SIGNALS.</div>')
+
+
 def show_spec(label):
     return runner.get_prompt(PRESETS[label]).strip()
 
@@ -122,18 +127,18 @@ def run_agent(label, mode, attempts, request: gr.Request):
     pid = PRESETS[label]
     ok, msg = GUARD.check(client_ip(request))
     if not ok:
-        yield banner("BLOCKED", msg, "warn"), render_log([]), "", ""
+        yield banner("BLOCKED", msg, "warn"), render_log([]), WAVE_IDLE, "", ""
         return
 
     cfgs = MODELS[:1] if mode == MODE_NANO else MODELS[:2]
     messages = [{"role": "system", "content": agent.SYSTEM},
                 {"role": "user", "content": runner.get_prompt(pid)}]
-    rows, spent, code, sim = [], 0.0, "", ""
+    rows, spent, code, sim, wave_html = [], 0.0, "", "", WAVE_IDLE
     try:
         for cfg in cfgs:
             for n in range(1, int(attempts) + 1):
                 yield (banner("RUNNING", f"{cfg['name'].upper()} ATTEMPT {n}", "run"),
-                       render_log(rows, pending=cfg["name"], spent=spent), code, sim)
+                       render_log(rows, pending=cfg["name"], spent=spent), wave_html, code, sim)
                 start = time.time()
                 try:
                     resp = agent.call_model(CLIENT, cfg["id"], messages)
@@ -147,16 +152,17 @@ def run_agent(label, mode, attempts, request: gr.Request):
                 spent += usd or 0.0
                 code = agent.extract_code(text)
                 if code:
-                    result = runner.run_candidate(pid, code)
+                    result = runner.run_candidate(pid, code, want_wave=True)
                 else:
-                    result = {"status": "no_code", "feedback":
+                    result = {"status": "no_code", "vcd": "", "feedback":
                               "NO CODE BLOCK IN REPLY (OUTPUT MAY HAVE HIT THE TOKEN LIMIT)"}
+                wave_html = wave.render_panel(result.get("vcd", ""), result["status"])
                 rows.append(dict(model=cfg["name"], status=result["status"], tokens=pt + ct,
                                  secs=time.time() - start, cost=usd))
                 sim = result["feedback"] or "ALL TESTS PASSED: 0 MISMATCHES"
                 if result["status"] == "pass":
                     yield (banner("PASS", f"SOLVED BY {cfg['name'].upper()} IN {len(rows)} CALL(S)", "pass"),
-                           render_log(rows, spent=spent), code, sim)
+                           render_log(rows, spent=spent), wave_html, code, sim)
                     return
                 messages += [
                     {"role": "assistant", "content": text or "(empty reply)"},
@@ -164,7 +170,7 @@ def run_agent(label, mode, attempts, request: gr.Request):
                         status=result["status"], details=result["feedback"] or "(none)")},
                 ]
         yield (banner("FAIL", "NOT SOLVED WITHIN THE ATTEMPT LIMIT", "fail"),
-               render_log(rows, spent=spent), code, sim)
+               render_log(rows, spent=spent), wave_html, code, sim)
     finally:
         GUARD.add_cost(spent)
 
@@ -197,6 +203,15 @@ table.log td { padding:3px 6px; border-bottom:1px solid #1a1200; }
 td.ok { color:var(--green); font-weight:700; } td.bad { color:var(--red); } td.run { color:var(--amber); }
 td.dim { color:var(--dim); } .spent { text-align:right; color:var(--dim); font-size:12px; padding-top:4px; }
 .foot { color:var(--dim); font-size:11px; letter-spacing:.05em; padding:6px 2px; }
+.wave-msg { padding:14px 4px; font-size:12px; letter-spacing:.06em; }
+.dim { color:var(--dim); }
+/* Make the selected mode button unmistakable: solid amber with dark text. */
+.gradio-container label:has(input:checked), .gradio-container label.selected {
+  background:var(--amber) !important; border-color:var(--amber) !important; color:#000 !important; }
+html body .gradio-container.gradio-container label.selected.selected span,
+html body .gradio-container.gradio-container label:has(input:checked) span {
+  color:#000 !important; font-weight:700 !important; }
+.gradio-container label:has(input[type=radio]) input { opacity:0; width:0; margin:0; position:absolute; }
 footer { display:none !important; }
 """
 
@@ -214,13 +229,14 @@ with gr.Blocks(title="RTLoop") as demo:
         with gr.Column(scale=3):
             status = gr.HTML(banner("READY", "SELECT A PROBLEM AND PRESS RUN", "run"))
             log = gr.HTML(render_log([]))
+            wave_out = gr.HTML(WAVE_IDLE)
             code_out = gr.Textbox(label="CANDIDATE VERILOG", lines=14, interactive=False)
             sim_out = gr.Textbox(label="SIMULATOR OUTPUT / FEEDBACK TO MODEL", lines=5, interactive=False)
     gr.HTML('<div class="foot">GENERATED CODE IS RUN IN A SIMULATOR. DEMO IS RATE-LIMITED AND CAPPED. '
             'BENCHMARK: NVIDIA VERILOGEVAL. SOURCE: GITHUB.COM/KARTAHUGHES/RTLOOP</div>')
 
     problem.change(show_spec, problem, spec)
-    run_btn.click(run_agent, [problem, mode, attempts], [status, log, code_out, sim_out])
+    run_btn.click(run_agent, [problem, mode, attempts], [status, log, wave_out, code_out, sim_out])
 
 demo.queue(default_concurrency_limit=4, max_size=20)
 

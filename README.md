@@ -75,6 +75,8 @@ Where Token Factory accelerated the work:
 
 Frictions I hit (reasoning replies that used the whole 8,192-token budget, unlisted Ultra pricing, a long latency tail) are reported in the Results notes above and in my hackathon feedback.
 
+**Other Nebius tools and services:** none. RTLoop uses only Token Factory's inference API. I did not use Nebius AI Cloud, Serverless Endpoints or Jobs, and I did not use Tavily. The live demo is hosted on Render's free tier, and calls Token Factory from there.
+
 ## Limitations
 
 - Runs on Icarus Verilog 11; five benchmark problems are excluded as described above.
